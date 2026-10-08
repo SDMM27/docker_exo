@@ -9,17 +9,17 @@ services:
       - ./api/app:/app/app:ro
       - ./api/tests:/app/tests:ro
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${API_DEV_PORT:-8000}:8000"
   web:
     volumes:
       - ./web/public:/usr/share/nginx/html:ro
       - ./web/nginx.conf:/etc/nginx/conf.d/default.conf:ro
   db:
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${DB_DEV_PORT:-5432}:5432"
   llm:
     ports:
-      - "127.0.0.1:8081:8080"
+      - "127.0.0.1:${LLM_DEV_PORT:-8081}:8080"
 
 # Un port publié est injoignable depuis l'hôte si le réseau est "internal" : en dev on lève la restriction.
 networks:
