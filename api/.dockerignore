@@ -1,2 +1,12 @@
-# TODO Jalon 1 — exclure du contexte de build tout ce qui n'a rien à faire dans l'image
-# (caches Python, .git, environnement virtuel, .env, ...) pour ne pas invalider le cache.
+# Exclus du contexte de build
+.git
+.gitignore
+.env
+.venv
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+Dockerfile
+.dockerignore
+*.md

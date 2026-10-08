@@ -1,22 +1,174 @@
-# ============================================================
-# TODO Jalon 2 — stack applicative : web -> api -> db + llm
-#
-#   name: llm-stack
-#   include: (Jalon 4) -> monitoring/compose.yml
-#
-# Services à définir (voir la fiche technique dans le README) :
-#   db        PostgreSQL, volume pgdata, scripts db/init, secret db_password, healthcheck pg_isready
-#   llm-init  job one-shot (restart "no") : télécharge le modèle dans le volume llm_models
-#   llm       serveur llama.cpp, modèle en lecture seule, healthcheck /health (start_period long !)
-#   api       build ./api (target runner), secrets, healthcheck, depends_on avec conditions
-#   web       build ./web, port publié UNIQUEMENT sur 127.0.0.1, depends_on api
-#   db-backup (bonus) profil "backup" : pg_dump vers ./backups
-#
-# Réseaux attendus :
-#   frontend (web, api) | backend (api, db) en "internal: true" | inference (api, llm)
-#   egress (llm-init seul) | observability (défini dans monitoring/compose.yml)
-#
-# Chaque service doit avoir : limites CPU/RAM (deploy.resources.limits), rotation des logs,
-# et le durcissement décrit dans le README (extends: compose.common.yml).
-# ============================================================
-services: {}
+name: llm-stack
+
+include:
+  - path: monitoring/compose.yml
+
+services:
+  db:
+    extends: { file: compose.common.yml, service: hardened }
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-llmapp}
+      POSTGRES_USER: ${POSTGRES_USER:-llmapp}
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets: [db_password]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    tmpfs: [/tmp, /run/postgresql]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512M }
+
+  llm-init:
+    extends: { file: compose.common.yml, service: hardened-lite }
+    image: curlimages/curl:8.22.0
+    user: root
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ -f "/models/$${MODEL_FILE}" ]; then echo "modèle déjà présent"; exit 0; fi
+        curl -fL --retry 3 -o "/models/$${MODEL_FILE}.part" "$${MODEL_URL}" && mv "/models/$${MODEL_FILE}.part" "/models/$${MODEL_FILE}"
+    environment:
+      MODEL_FILE: ${MODEL_FILE:-qwen2.5-0.5b-instruct-q4_k_m.gguf}
+      MODEL_URL: ${MODEL_URL:-https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf}
+    volumes:
+      - llm_models:/models
+    networks: [egress]
+    restart: "no"
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 128M }
+
+  llm:
+    extends: { file: compose.common.yml, service: hardened }
+    image: ghcr.io/ggml-org/llama.cpp:server-b11434
+    user: "1000:1000"
+    command:
+      - --model
+      - /models/${MODEL_FILE:-qwen2.5-0.5b-instruct-q4_k_m.gguf}
+      - --alias
+      - ${LLM_MODEL:-qwen2.5-0.5b-instruct}
+      - --ctx-size
+      - "4096"
+      - --parallel
+      - "2"
+      - --threads
+      - ${LLM_THREADS:-4}
+      - --metrics
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+    volumes:
+      - llm_models:/models:ro
+    tmpfs: [/tmp]
+    networks: [inference, observability]
+    depends_on:
+      llm-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    deploy:
+      resources:
+        limits: { cpus: "${LLM_CPUS:-2.0}", memory: 2G }
+
+  api:
+    extends: { file: compose.common.yml, service: hardened }
+    build:
+      context: ./api
+      target: runner
+    image: llm-stack/api:${APP_VERSION:-dev}
+    environment:
+      DB_HOST: db
+      DB_NAME: ${POSTGRES_DB:-llmapp}
+      DB_USER: ${POSTGRES_USER:-llmapp}
+      DB_PASSWORD_FILE: /run/secrets/db_password
+      LLM_URL: http://llm:8080
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5-0.5b-instruct}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    secrets: [db_password]
+    tmpfs: [/tmp]
+    networks: [frontend, backend, inference, observability]
+    depends_on:
+      db: { condition: service_healthy }
+      llm: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=2)"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512M }
+
+  web:
+    extends: { file: compose.common.yml, service: hardened }
+    build: ./web
+    image: llm-stack/web:${APP_VERSION:-dev}
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:8080"
+    tmpfs: [/tmp]
+    networks: [frontend]
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 128M }
+
+  db-backup:
+    extends: { file: compose.common.yml, service: hardened-lite }
+    profiles: [backup]
+    image: postgres:16-alpine
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - PGPASSWORD="$$(cat /run/secrets/db_password)" pg_dump -h db -U "$${POSTGRES_USER}" "$${POSTGRES_DB}" > "/backups/dump_$$(date +%Y%m%d_%H%M%S).sql"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-llmapp}
+      POSTGRES_USER: ${POSTGRES_USER:-llmapp}
+    secrets: [db_password]
+    volumes:
+      - ./backups:/backups
+    networks: [backend]
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 128M }
+
+networks:
+  frontend:
+  backend:
+    internal: true
+  inference:
+    internal: true
+  egress:
+
+volumes:
+  pgdata:
+  llm_models:
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt

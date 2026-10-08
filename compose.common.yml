@@ -1,10 +1,15 @@
-# ============================================================
-# TODO Jalon 3 — briques réutilisables, importées avec "extends"
-#
-#   hardened      : read_only, cap_drop ALL, security_opt no-new-privileges,
-#                   logging json-file avec rotation (max-size 10m, max-file 3)
-#   hardened-lite : idem SANS read_only (images qui doivent écrire dans leur système de fichiers)
-# ============================================================
+# Briques réutilisables importées avec "extends"
 services:
-  hardened: {}
-  hardened-lite: {}
+  hardened:
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+  hardened-lite:
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

@@ -1,7 +1,12 @@
-# ============================================================
-# TODO Jalon 3 — surcouche PROD :  docker compose -f compose.yml -f compose.prod.yml up -d --build
-#   - api et web : images versionnées  llm-stack/<service>:${APP_VERSION:?...}  (variable OBLIGATOIRE)
-#   - restart: always sur tous les services applicatifs
-#   - aucun port de debug publié
-# ============================================================
-services: {}
+# Surcouche PROD :  docker compose -f compose.yml -f compose.prod.yml up -d --build
+services:
+  api:
+    image: llm-stack/api:${APP_VERSION:?APP_VERSION est obligatoire en production}
+    restart: always
+  web:
+    image: llm-stack/web:${APP_VERSION:?APP_VERSION est obligatoire en production}
+    restart: always
+  db:
+    restart: always
+  llm:
+    restart: always

@@ -1,14 +1,114 @@
-# ============================================================
-# TODO Jalon 4 — sous-projet monitoring, inclus par ../compose.yml via "include"
-# Tous les services portent  profiles: [monitoring]. Les chemins sont relatifs à CE fichier.
-#
-#   prometheus  prom/prometheus:v3.13.4        127.0.0.1:9090  config + alerts en lecture seule, volume prometheus_data
-#   loki        grafana/loki:3.7.8             (non publié)    config en lecture seule, volume loki_data (/loki)
-#   alloy       grafana/alloy:v1.20.1          (non publié)    config + /var/run/docker.sock en lecture seule
-#   cadvisor    ghcr.io/google/cadvisor:v0.60.6 (non publié)   montages hôte en lecture seule
-#   grafana     grafana/grafana:12.4.12        127.0.0.1:3000  provisioning + dashboards, secret grafana_admin_password
-#
-# Définir ici : secret grafana_admin_password, volumes, et le réseau "observability".
-# Prometheus, Grafana et Loki doivent être durcis (extends ../compose.common.yml, service hardened-lite).
-# ============================================================
-services: {}
+# Sous-projet monitoring, inclus par ../compose.yml. Chemins relatifs à CE fichier.
+services:
+  prometheus:
+    extends: { file: ../compose.common.yml, service: hardened-lite }
+    profiles: [monitoring]
+    image: prom/prometheus:v3.13.4
+    user: "65534:65534"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    networks: [observability]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 512M }
+
+  loki:
+    extends: { file: ../compose.common.yml, service: hardened-lite }
+    profiles: [monitoring]
+    image: grafana/loki:3.7.8
+    command: ["-config.file=/etc/loki/loki-config.yml"]
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    networks: [observability]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3100/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 512M }
+
+  alloy:
+    extends: { file: ../compose.common.yml, service: hardened-lite }
+    profiles: [monitoring]
+    image: grafana/alloy:v1.20.1
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    networks: [observability]
+    depends_on:
+      loki: { condition: service_healthy }
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256M }
+
+  cadvisor:
+    extends: { file: ../compose.common.yml, service: hardened-lite }
+    profiles: [monitoring]
+    image: ghcr.io/google/cadvisor:v0.60.6
+    command: ["--docker_only=true", "--housekeeping_interval=15s"]
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+    networks: [observability]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256M }
+
+  grafana:
+    extends: { file: ../compose.common.yml, service: hardened-lite }
+    profiles: [monitoring]
+    image: grafana/grafana:12.4.12
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_LOG_MODE: console
+    secrets: [grafana_admin_password]
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    networks: [observability]
+    depends_on:
+      prometheus: { condition: service_healthy }
+      loki: { condition: service_healthy }
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 512M }
+
+networks:
+  observability:
+
+volumes:
+  prometheus_data:
+  loki_data:
+  alloy_data:
+  grafana_data:
+
+secrets:
+  grafana_admin_password:
+    file: ../secrets/grafana_admin_password.txt

@@ -1,9 +1,29 @@
-# ============================================================
-# TODO Jalon 3 — surcouche DEV, chargée automatiquement par "docker compose up"
-#   - api : build.target = dev, bind mounts ./api/app et ./api/tests (lecture seule), LOG_LEVEL=DEBUG,
-#           port 127.0.0.1:8000
-#   - web : bind mounts de ./web/public et ./web/nginx.conf (lecture seule)
-#   - db  : port 127.0.0.1:5432 (impossible si le réseau backend reste "internal" !)
-#   - llm : port 127.0.0.1:8081 -> 8080 (interface web de llama.cpp)
-# ============================================================
-services: {}
+# Surcouche DEV, chargée automatiquement par "docker compose up"
+services:
+  api:
+    build:
+      target: dev
+    environment:
+      LOG_LEVEL: DEBUG
+    volumes:
+      - ./api/app:/app/app:ro
+      - ./api/tests:/app/tests:ro
+    ports:
+      - "127.0.0.1:8000:8000"
+  web:
+    volumes:
+      - ./web/public:/usr/share/nginx/html:ro
+      - ./web/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+  db:
+    ports:
+      - "127.0.0.1:5432:5432"
+  llm:
+    ports:
+      - "127.0.0.1:8081:8080"
+
+# Un port publié est injoignable depuis l'hôte si le réseau est "internal" : en dev on lève la restriction.
+networks:
+  backend:
+    internal: false
+  inference:
+    internal: false
