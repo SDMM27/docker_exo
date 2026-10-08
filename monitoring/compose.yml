@@ -42,6 +42,7 @@ services:
     extends: { file: ../compose.common.yml, service: hardened-lite }
     profiles: [monitoring]
     image: grafana/alloy:v1.20.1
+    user: root   # nécessaire pour lire /var/run/docker.sock et écrire dans le volume ; capacités toutes retirées
     command:
       - run
       - --server.http.listen-addr=0.0.0.0:12345
