@@ -1,0 +1,14 @@
+# ============================================================
+# TODO Jalon 4 — sous-projet monitoring, inclus par ../compose.yml via "include"
+# Tous les services portent  profiles: [monitoring]. Les chemins sont relatifs à CE fichier.
+#
+#   prometheus  prom/prometheus:v3.13.4        127.0.0.1:9090  config + alerts en lecture seule, volume prometheus_data
+#   loki        grafana/loki:3.7.8             (non publié)    config en lecture seule, volume loki_data (/loki)
+#   alloy       grafana/alloy:v1.20.1          (non publié)    config + /var/run/docker.sock en lecture seule
+#   cadvisor    ghcr.io/google/cadvisor:v0.60.6 (non publié)   montages hôte en lecture seule
+#   grafana     grafana/grafana:12.4.12        127.0.0.1:3000  provisioning + dashboards, secret grafana_admin_password
+#
+# Définir ici : secret grafana_admin_password, volumes, et le réseau "observability".
+# Prometheus, Grafana et Loki doivent être durcis (extends ../compose.common.yml, service hardened-lite).
+# ============================================================
+services: {}

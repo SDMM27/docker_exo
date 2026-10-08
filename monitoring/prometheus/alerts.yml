@@ -1,0 +1,26 @@
+groups:
+  - name: llm-stack
+    rules:
+      - alert: ApiDown
+        expr: up{job="api"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "L'API ne répond plus au scrape Prometheus"
+
+      - alert: ApiHighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+            / clamp_min(sum(rate(http_requests_total[5m])), 0.001) > 0.05
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "Plus de 5 % d'erreurs 5xx sur l'API"
+
+      - alert: LlmSlowAnswers
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(llm_request_duration_seconds_bucket[5m]))) > 30
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "p95 des réponses du LLM supérieur à 30 s"

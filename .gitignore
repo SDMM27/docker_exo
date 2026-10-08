@@ -1,0 +1,7 @@
+.env
+secrets/*.txt
+backups/*
+!backups/.gitkeep
+__pycache__/
+.pytest_cache/
+*.pyc

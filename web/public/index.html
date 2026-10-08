@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chat LLM — Docker J3</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Assistant LLM <span>Docker · Jour 3</span></h1>
+      <p id="status" class="status">Vérification…</p>
+    </header>
+    <section id="chat" aria-live="polite"></section>
+    <form id="form">
+      <input id="msg" type="text" maxlength="2000" placeholder="Pose une question sur Docker, le Big Data, l'IA…" autocomplete="off" required>
+      <button id="send" type="submit">Envoyer</button>
+    </form>
+    <details>
+      <summary>Historique (base PostgreSQL)</summary>
+      <ol id="history"></ol>
+    </details>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

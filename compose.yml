@@ -1,0 +1,22 @@
+# ============================================================
+# TODO Jalon 2 — stack applicative : web -> api -> db + llm
+#
+#   name: llm-stack
+#   include: (Jalon 4) -> monitoring/compose.yml
+#
+# Services à définir (voir la fiche technique dans le README) :
+#   db        PostgreSQL, volume pgdata, scripts db/init, secret db_password, healthcheck pg_isready
+#   llm-init  job one-shot (restart "no") : télécharge le modèle dans le volume llm_models
+#   llm       serveur llama.cpp, modèle en lecture seule, healthcheck /health (start_period long !)
+#   api       build ./api (target runner), secrets, healthcheck, depends_on avec conditions
+#   web       build ./web, port publié UNIQUEMENT sur 127.0.0.1, depends_on api
+#   db-backup (bonus) profil "backup" : pg_dump vers ./backups
+#
+# Réseaux attendus :
+#   frontend (web, api) | backend (api, db) en "internal: true" | inference (api, llm)
+#   egress (llm-init seul) | observability (défini dans monitoring/compose.yml)
+#
+# Chaque service doit avoir : limites CPU/RAM (deploy.resources.limits), rotation des logs,
+# et le durcissement décrit dans le README (extends: compose.common.yml).
+# ============================================================
+services: {}
