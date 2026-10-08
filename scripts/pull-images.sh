@@ -11,6 +11,7 @@ for img in \
   grafana/grafana:12.4.12 \
   grafana/loki:3.7.8 \
   grafana/alloy:v1.20.1 \
-  ghcr.io/google/cadvisor:v0.60.6 ; do
+  ghcr.io/google/cadvisor:v0.60.6 \
+  aquasec/trivy:0.58.0 ; do
   docker pull "$img"
 done

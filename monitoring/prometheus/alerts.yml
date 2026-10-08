@@ -24,3 +24,19 @@ groups:
         labels: { severity: warning }
         annotations:
           summary: "p95 des réponses du LLM supérieur à 30 s"
+
+      - alert: LlmDown
+        expr: up{job="llm"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Le serveur LLM ne répond plus au scrape Prometheus"
+
+      - alert: ContainerHighMemory
+        expr: |
+          sum by (name) (container_memory_working_set_bytes{name!=""})
+            / sum by (name) (container_spec_memory_limit_bytes{name!=""} > 0) > 0.9
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Un conteneur utilise plus de 90 % de sa limite mémoire"

@@ -3,6 +3,10 @@ services:
   api:
     image: llm-stack/api:${APP_VERSION:?APP_VERSION est obligatoire en production}
     restart: always
+    deploy:
+      replicas: 2   # bonus : nginx répartit la charge via le DNS Docker (api -> 2 conteneurs)
+      resources:
+        limits: { cpus: "1.0", memory: 512M }
   web:
     image: llm-stack/web:${APP_VERSION:?APP_VERSION est obligatoire en production}
     restart: always
